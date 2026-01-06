@@ -5,7 +5,7 @@ local Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"
 ))()
 
-local Window = Library.CreateLib("Windows 10 ware| Bot Player", "BloodTheme")
+local Window = Library.CreateLib("Windows 10 ware | Bot Player", "BloodTheme")
 
 -- ===============================
 -- SERVICES
@@ -13,6 +13,7 @@ local Window = Library.CreateLib("Windows 10 ware| Bot Player", "BloodTheme")
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
 local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
 
 -- ===============================
 -- VARIÁVEIS
@@ -20,7 +21,20 @@ local RunService = game:GetService("RunService")
 local Character, Humanoid, HRP
 local BotEnabled = false
 local FollowTarget = nil
-local NormalWalkDistance = 25
+local WalkSpeedValue = 16
+local InfJump = false
+local Noclip = false
+
+-- ===============================
+-- NOTIFY LOAD
+-- ===============================
+pcall(function()
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "Bot IA",
+        Text = "Carregado 100% Bot IA",
+        Duration = 4
+    })
+end)
 
 -- ===============================
 -- CHARACTER SETUP
@@ -29,134 +43,140 @@ local function SetupCharacter(char)
     Character = char
     Humanoid = char:WaitForChild("Humanoid")
     HRP = char:WaitForChild("HumanoidRootPart")
-
-    Humanoid.AutoRotate = true
-    if Humanoid.WalkSpeed < 14 then
-        Humanoid.WalkSpeed = 16
-    end
+    Humanoid.WalkSpeed = WalkSpeedValue
 end
 
-if Player.Character then
-    SetupCharacter(Player.Character)
-end
+if Player.Character then SetupCharacter(Player.Character) end
 Player.CharacterAdded:Connect(SetupCharacter)
 
 -- ===============================
--- UI
+-- UI TABS
 -- ===============================
-local MainTab = Window:NewTab("Bot")
-local BotSection = MainTab:NewSection("Controle do Bot")
+local BotTab = Window:NewTab("Bot")
+local BotSection = BotTab:NewSection("Bot IA")
+
+local PlayerTab = Window:NewTab("Player")
+local PlayerSection = PlayerTab:NewSection("Movimento")
+local VisualTab = Window:NewTab("Visual")
+local VisualSection = VisualTab:NewSection("ESP")
 
 -- ===============================
--- LISTA DE PLAYERS
+-- BOT FOLLOW
 -- ===============================
 local PlayerList = {}
-
 local function RefreshPlayers()
     PlayerList = {}
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= Player then
-            table.insert(PlayerList, plr.Name)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player then
+            table.insert(PlayerList, p.Name)
         end
     end
 end
-
 RefreshPlayers()
 Players.PlayerAdded:Connect(RefreshPlayers)
 Players.PlayerRemoving:Connect(RefreshPlayers)
 
-BotSection:NewDropdown(
-    "Selecionar Player",
-    "Bot vai até o player escolhido",
-    PlayerList,
-    function(selected)
-        FollowTarget = Players:FindFirstChild(selected)
-    end
-)
+BotSection:NewDropdown("Seguir Player", "Bot segue alguém", PlayerList, function(v)
+    FollowTarget = Players:FindFirstChild(v)
+end)
 
-BotSection:NewButton("Modo Normal", "Bot anda sozinho", function()
-    FollowTarget = nil
+BotSection:NewToggle("Ativar Bot", "Bot anda sozinho/segue", function(v)
+    BotEnabled = v
 end)
 
 -- ===============================
--- BOT MOVEMENT (NATURAL)
+-- BOT MOVEMENT
 -- ===============================
-local function BotMovement()
-    task.spawn(function()
-        while BotEnabled do
-            if not (Humanoid and HRP) then
-                task.wait(1)
-                continue
-            end
-
-            -- =====================
-            -- SEGUIR PLAYER
-            -- =====================
-            if FollowTarget
-                and FollowTarget.Character
-                and FollowTarget.Character:FindFirstChild("HumanoidRootPart") then
-
-                local targetHRP = FollowTarget.Character.HumanoidRootPart
-                local offset = (HRP.Position - targetHRP.Position).Unit * 3
-                local targetPos = targetHRP.Position + offset
-
-                Humanoid:MoveTo(targetPos)
-                task.wait(0.4)
-
+task.spawn(function()
+    while true do
+        if BotEnabled and Humanoid and HRP then
+            if FollowTarget and FollowTarget.Character and FollowTarget.Character:FindFirstChild("HumanoidRootPart") then
+                Humanoid:MoveTo(FollowTarget.Character.HumanoidRootPart.Position)
             else
-                -- =====================
-                -- MODO NORMAL
-                -- =====================
-                local direction =
-                    HRP.CFrame.LookVector +
-                    HRP.CFrame.RightVector * math.random(-1,1) * 0.3
-
-                local targetPos = HRP.Position + direction.Unit * NormalWalkDistance
-                Humanoid:MoveTo(targetPos)
-
-                local start = tick()
-                while tick() - start < math.random(8,10)
-                    and BotEnabled
-                    and not FollowTarget do
-                    task.wait(0.3)
-                end
-
-                task.wait(math.random(2,4))
+                local dir = HRP.CFrame.LookVector + HRP.CFrame.RightVector * math.random(-1,1)
+                Humanoid:MoveTo(HRP.Position + dir.Unit * 20)
             end
         end
-    end)
-end
-
--- ===============================
--- TOGGLE BOT
--- ===============================
-BotSection:NewToggle("Ativar Bot", "Bot se comporta como player", function(state)
-    BotEnabled = state
-    if state then
-        BotMovement()
+        task.wait(0.4)
     end
 end)
 
 -- ===============================
--- BOLINHA FLUTUANTE (DECAL)
+-- PLAYER FUNCTIONS
 -- ===============================
-local gui = Instance.new("ScreenGui")
-gui.Name = "BloodToggle"
-gui.ResetOnSpawn = false
-gui.Parent = game.CoreGui
+PlayerSection:NewSlider("WalkSpeed", "Velocidade", 100, 16, function(v)
+    WalkSpeedValue = v
+    if Humanoid then Humanoid.WalkSpeed = v end
+end)
 
-local btn = Instance.new("ImageButton")
-btn.Parent = gui
+PlayerSection:NewToggle("Infinite Jump", "Pular infinito", function(v)
+    InfJump = v
+end)
+
+PlayerSection:NewToggle("Noclip", "Atravessar paredes", function(v)
+    Noclip = v
+end)
+
+UIS.JumpRequest:Connect(function()
+    if InfJump and Humanoid then
+        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+RunService.Stepped:Connect(function()
+    if Noclip and Character then
+        for _, p in ipairs(Character:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- ===============================
+-- SIMPLE ESP
+-- ===============================
+VisualSection:NewToggle("ESP Players", "Marca jogadores", function(state)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player and p.Character then
+            local h = p.Character:FindFirstChild("HumanoidRootPart")
+            if h then
+                if state then
+                    if not h:FindFirstChild("ESP") then
+                        local b = Instance.new("BillboardGui", h)
+                        b.Name = "ESP"
+                        b.Size = UDim2.new(0,100,0,40)
+                        b.AlwaysOnTop = true
+                        local t = Instance.new("TextLabel", b)
+                        t.Size = UDim2.new(1,0,1,0)
+                        t.BackgroundTransparency = 1
+                        t.Text = p.Name
+                        t.TextColor3 = Color3.new(1,0,0)
+                    end
+                else
+                    if h:FindFirstChild("ESP") then
+                        h.ESP:Destroy()
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ===============================
+-- BOLINHA FLUTUANTE (FUNCIONA)
+-- ===============================
+local gui = Instance.new("ScreenGui", Player.PlayerGui)
+gui.Name = "ToggleHub"
+gui.ResetOnSpawn = false
+
+local btn = Instance.new("ImageButton", gui)
 btn.Size = UDim2.new(0,60,0,60)
 btn.Position = UDim2.new(0.05,0,0.5,0)
-btn.BackgroundColor3 = Color3.fromRGB(120,0,0)
-btn.BorderSizePixel = 0
+btn.Image = "rbxassetid://80645954347420"
+btn.BackgroundTransparency = 1
 btn.Active = true
 btn.Draggable = true
-
--- DECAL DA BOLINHA
-btn.Image = "rbxassetid://80645954347420"
-btn.ScaleType = Enum.ScaleType.Fit
 
 Instance.new("UICorner", btn).CornerRadius = UDim.new(1,0)
 
