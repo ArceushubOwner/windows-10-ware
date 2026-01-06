@@ -1,0 +1,165 @@
+-- ===============================
+-- Kavo UI Library
+-- ===============================
+local Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"
+))()
+
+local Window = Library.CreateLib("Windows 10 ware| Bot Player", "BloodTheme")
+
+-- ===============================
+-- SERVICES
+-- ===============================
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- ===============================
+-- VARIÁVEIS
+-- ===============================
+local Character, Humanoid, HRP
+local BotEnabled = false
+local FollowTarget = nil
+local NormalWalkDistance = 25
+
+-- ===============================
+-- CHARACTER SETUP
+-- ===============================
+local function SetupCharacter(char)
+    Character = char
+    Humanoid = char:WaitForChild("Humanoid")
+    HRP = char:WaitForChild("HumanoidRootPart")
+
+    Humanoid.AutoRotate = true
+    if Humanoid.WalkSpeed < 14 then
+        Humanoid.WalkSpeed = 16
+    end
+end
+
+if Player.Character then
+    SetupCharacter(Player.Character)
+end
+Player.CharacterAdded:Connect(SetupCharacter)
+
+-- ===============================
+-- UI
+-- ===============================
+local MainTab = Window:NewTab("Bot")
+local BotSection = MainTab:NewSection("Controle do Bot")
+
+-- ===============================
+-- LISTA DE PLAYERS
+-- ===============================
+local PlayerList = {}
+
+local function RefreshPlayers()
+    PlayerList = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= Player then
+            table.insert(PlayerList, plr.Name)
+        end
+    end
+end
+
+RefreshPlayers()
+Players.PlayerAdded:Connect(RefreshPlayers)
+Players.PlayerRemoving:Connect(RefreshPlayers)
+
+BotSection:NewDropdown(
+    "Selecionar Player",
+    "Bot vai até o player escolhido",
+    PlayerList,
+    function(selected)
+        FollowTarget = Players:FindFirstChild(selected)
+    end
+)
+
+BotSection:NewButton("Modo Normal", "Bot anda sozinho", function()
+    FollowTarget = nil
+end)
+
+-- ===============================
+-- BOT MOVEMENT (NATURAL)
+-- ===============================
+local function BotMovement()
+    task.spawn(function()
+        while BotEnabled do
+            if not (Humanoid and HRP) then
+                task.wait(1)
+                continue
+            end
+
+            -- =====================
+            -- SEGUIR PLAYER
+            -- =====================
+            if FollowTarget
+                and FollowTarget.Character
+                and FollowTarget.Character:FindFirstChild("HumanoidRootPart") then
+
+                local targetHRP = FollowTarget.Character.HumanoidRootPart
+                local offset = (HRP.Position - targetHRP.Position).Unit * 3
+                local targetPos = targetHRP.Position + offset
+
+                Humanoid:MoveTo(targetPos)
+                task.wait(0.4)
+
+            else
+                -- =====================
+                -- MODO NORMAL
+                -- =====================
+                local direction =
+                    HRP.CFrame.LookVector +
+                    HRP.CFrame.RightVector * math.random(-1,1) * 0.3
+
+                local targetPos = HRP.Position + direction.Unit * NormalWalkDistance
+                Humanoid:MoveTo(targetPos)
+
+                local start = tick()
+                while tick() - start < math.random(8,10)
+                    and BotEnabled
+                    and not FollowTarget do
+                    task.wait(0.3)
+                end
+
+                task.wait(math.random(2,4))
+            end
+        end
+    end)
+end
+
+-- ===============================
+-- TOGGLE BOT
+-- ===============================
+BotSection:NewToggle("Ativar Bot", "Bot se comporta como player", function(state)
+    BotEnabled = state
+    if state then
+        BotMovement()
+    end
+end)
+
+-- ===============================
+-- BOLINHA FLUTUANTE (DECAL)
+-- ===============================
+local gui = Instance.new("ScreenGui")
+gui.Name = "BloodToggle"
+gui.ResetOnSpawn = false
+gui.Parent = game.CoreGui
+
+local btn = Instance.new("ImageButton")
+btn.Parent = gui
+btn.Size = UDim2.new(0,60,0,60)
+btn.Position = UDim2.new(0.05,0,0.5,0)
+btn.BackgroundColor3 = Color3.fromRGB(120,0,0)
+btn.BorderSizePixel = 0
+btn.Active = true
+btn.Draggable = true
+
+-- DECAL DA BOLINHA
+btn.Image = "rbxassetid://80645954347420"
+btn.ScaleType = Enum.ScaleType.Fit
+
+Instance.new("UICorner", btn).CornerRadius = UDim.new(1,0)
+
+btn.MouseButton1Click:Connect(function()
+    Library:ToggleUI()
+end)
